@@ -20,4 +20,4 @@ npm test
 npm run build
 ```
 
-页面路由和响应式应用外壳已就位；业务页面当前为占位内容。API 请求统一从 `src/api/client.ts` 发起。
+认证、梦境记录/编辑、关键词维护、单梦词网络、列表筛选和月历已接入后端。API 请求统一从 `src/api/client.ts` 发起，并携带 HttpOnly Cookie 会话。
