@@ -24,6 +24,8 @@ export interface Dream {
   created_at: string
   keywords: Keyword[]
   keyword_extraction_status: 'pending' | 'complete' | 'failed' | 'unconfigured'
+  is_public: boolean
+  is_anonymous: boolean
 }
 
 export interface DreamPage {
@@ -38,6 +40,7 @@ export interface NetworkNode {
   word: string
   weight: number
   occurrences: number
+  related_dreams_total: number
   related_dreams: Array<{
     id: number
     date: string
@@ -55,6 +58,7 @@ export interface DreamNetwork {
   nodes: NetworkNode[]
   edges: NetworkEdge[]
   dream_count: number
+  truncated: boolean
 }
 
 export interface CalendarDay {
@@ -77,6 +81,44 @@ export interface DreamPayload {
   date: string
   mood: Mood[]
   clarity: number
+  is_public?: boolean
+  is_anonymous?: boolean
+}
+
+export interface PublicDream {
+  id: number
+  date: string
+  summary: string
+  mood: Mood[]
+  keywords: string[]
+  author_label: string
+  is_anonymous: boolean
+  reaction_count: number
+  reacted_by_me: boolean
+  is_mine: boolean
+}
+
+export interface PublicDreamPage {
+  items: PublicDream[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface DreamReaction {
+  reaction_count: number
+  reacted_by_me: boolean
+}
+
+export interface DreamMatch extends PublicDream {
+  common_keywords: string[]
+  similarity: number
+}
+
+export interface DreamMatchPage {
+  date: string
+  total: number
+  items: DreamMatch[]
 }
 
 export interface KeywordPayload {

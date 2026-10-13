@@ -158,7 +158,12 @@ function DreamCard({ dream }: { dream: Dream }) {
       to={`/dream/${dream.id}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <time className="text-xs text-dream-muted dark:text-dream-muted-dark" dateTime={dream.date}>{dream.date}</time>
+        <div className="flex flex-wrap items-center gap-2">
+          <time className="text-xs text-dream-muted dark:text-dream-muted-dark" dateTime={dream.date}>{dream.date}</time>
+          <span className="rounded-full border border-dream-line px-2 py-0.5 text-[10px] text-dream-muted dark:border-dream-line-dark dark:text-dream-muted-dark">
+            {dream.is_public ? `公开${dream.is_anonymous ? ' · 匿名' : ''}` : '仅自己可见'}
+          </span>
+        </div>
         <div className="flex flex-wrap gap-1.5">
           {dream.mood.map((mood: Mood) => (
             <span className="rounded-full bg-dream-violet-soft px-2 py-0.5 text-[11px] text-dream-violet dark:bg-dream-violet-deep" key={mood}>{mood}</span>

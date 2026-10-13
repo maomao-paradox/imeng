@@ -29,6 +29,10 @@ from app.services.keyword_extractor import extract_dream_keywords
 
 router = APIRouter(prefix="/dreams", tags=["dreams"])
 
+NETWORK_NODE_LIMIT = 200
+NETWORK_EDGE_LIMIT = 1000
+NETWORK_RELATED_DREAM_LIMIT = 20
+
 
 async def _owned_dream(db: AsyncSession, user: User, dream_id: int) -> Dream:
     dream = await db.scalar(
@@ -53,6 +57,8 @@ async def create_dream(
         date=payload.date,
         mood=payload.mood,
         clarity=payload.clarity,
+        is_public=payload.is_public,
+        is_anonymous=payload.is_anonymous,
         keywords=[],
     )
     db.add(dream)
@@ -172,7 +178,7 @@ async def get_all_dreams_network(
         pair_counts.update(combinations(sorted(words), 2))
     max_pair_count = max(pair_counts.values(), default=1)
 
-    nodes = [
+    all_nodes = [
         NetworkNode(
             id=word_ids[word],
             word=labels[word],
@@ -182,22 +188,48 @@ async def get_all_dreams_network(
                 word_dreams[word].values(),
                 key=lambda dream: (dream.date, dream.id),
                 reverse=True,
-            ),
+            )[:NETWORK_RELATED_DREAM_LIMIT],
+            related_dreams_total=len(word_dreams[word]),
         )
         for word in sorted(
             labels,
             key=lambda item: (-len(word_dreams[item]), labels[item].casefold()),
         )
     ]
-    edges = [
+    nodes = all_nodes[:NETWORK_NODE_LIMIT]
+    included_node_ids = {node.id for node in nodes}
+    all_edges = [
         NetworkEdge(
             source=word_ids[left],
             target=word_ids[right],
             strength=count / max_pair_count,
         )
-        for (left, right), count in sorted(pair_counts.items())
+        for (left, right), count in sorted(
+            pair_counts.items(),
+            key=lambda pair: (
+                -pair[1],
+                labels[pair[0][0]].casefold(),
+                labels[pair[0][1]].casefold(),
+            ),
+        )
+        if word_ids[left] in included_node_ids
+        and word_ids[right] in included_node_ids
     ]
-    return DreamNetwork(nodes=nodes, edges=edges, dream_count=dream_count or 0)
+    edges = all_edges[:NETWORK_EDGE_LIMIT]
+    truncated = (
+        len(all_nodes) > NETWORK_NODE_LIMIT
+        or len(all_edges) > NETWORK_EDGE_LIMIT
+        or any(
+            len(word_dreams[word]) > NETWORK_RELATED_DREAM_LIMIT
+            for word in labels
+        )
+    )
+    return DreamNetwork(
+        nodes=nodes,
+        edges=edges,
+        dream_count=dream_count or 0,
+        truncated=truncated,
+    )
 
 
 @router.get("/{dream_id}", response_model=DreamRead)
@@ -221,7 +253,8 @@ async def update_dream(
     changes = payload.model_dump(exclude_unset=True)
     content_changed = "content" in changes and changes["content"] != dream.content
     for field, value in changes.items():
-        setattr(dream, field, value)
+        if value is not None:
+            setattr(dream, field, value)
     if content_changed:
         await extract_dream_keywords(dream)
     await db.commit()
@@ -317,6 +350,7 @@ async def get_dream_network(
                 weight=keyword.weight,
                 occurrences=total_occurrences or 0,
                 related_dreams=summaries,
+                related_dreams_total=total_occurrences or 0,
             )
         )
 

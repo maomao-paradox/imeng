@@ -6,6 +6,10 @@ import { DreamDetailPage } from './features/dreams/DreamDetailPage'
 import { DreamFormPage } from './features/dreams/DreamFormPage'
 import { DreamListPage } from './features/dreams/DreamListPage'
 import { NetworkPage } from './features/network/NetworkPage'
+import { DiscoverPage } from './features/social/DiscoverPage'
+import { MatchesPage } from './features/social/MatchesPage'
+import { getTodayMatches } from './api/social'
+import type { DreamMatchPage } from './types/dream'
 import { useAuthStore } from './stores/auth-store'
 import { useUiStore } from './stores/ui-store'
 
@@ -14,6 +18,7 @@ const navigation = [
   { to: '/dreams', label: '梦境' },
   { to: '/network', label: '词网络' },
   { to: '/calendar', label: '日历' },
+  { to: '/discover', label: '梦境广场' },
 ]
 
 function AppLayout() {
@@ -91,6 +96,23 @@ function AppLayout() {
 
 function HomePage() {
   const user = useAuthStore((state) => state.user)
+  const [matches, setMatches] = useState<DreamMatchPage | null>(null)
+  const [matchError, setMatchError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    getTodayMatches()
+      .then((result) => {
+        if (active) setMatches(result)
+      })
+      .catch((error: unknown) => {
+        if (active) setMatchError(error instanceof Error ? error.message : '暂时无法读取今日匹配')
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
   return (
     <section className="mx-auto my-16 max-w-3xl text-center sm:my-24">
       <p className="mb-4 text-[11px] font-bold tracking-[0.2em] text-dream-violet">DREAM JOURNAL</p>
@@ -106,6 +128,18 @@ function HomePage() {
       >
         记录一个梦 <span aria-hidden="true">↗</span>
       </NavLink>
+      {matches && matches.total > 0 && (
+        <div className="mx-auto mt-6 max-w-xl rounded-2xl border border-dream-violet/30 bg-dream-violet-soft p-4 text-left dark:bg-dream-violet-deep">
+          <p className="text-sm font-medium">今天发现 {matches.total} 条相似梦境</p>
+          <p className="mt-1 text-xs text-dream-muted dark:text-dream-muted-dark">
+            与其他梦旅人的公开梦境产生了关键词连接。
+          </p>
+          <NavLink className="mt-3 inline-block text-sm text-dream-violet no-underline" to="/matches">
+            查看匹配结果 →
+          </NavLink>
+        </div>
+      )}
+      {matchError && <p className="mt-4 text-xs text-red-500" role="alert">{matchError}</p>}
       <DreamListPage compact todayOnly />
     </section>
   )
@@ -151,6 +185,8 @@ function ProtectedRoutes() {
         <Route path="dreams" element={<DreamListPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="network" element={<NetworkPage />} />
+        <Route path="discover" element={<DiscoverPage />} />
+        <Route path="matches" element={<MatchesPage />} />
         <Route path="profile" element={<div className="py-16 text-center">个人设置将在后续版本开放</div>} />
         <Route path="*" element={<div className="py-16 text-center">页面不存在</div>} />
       </Route>

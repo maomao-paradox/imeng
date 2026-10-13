@@ -7,6 +7,9 @@
     "types": ["vite/client", "vitest/globals"],
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    },
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -22,5 +25,12 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "tests"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue",
+    "src/types/*",
+    "tests"
+  ]
 }

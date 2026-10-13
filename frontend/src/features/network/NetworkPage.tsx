@@ -40,6 +40,11 @@ export function NetworkPage() {
           <p className="mb-3 text-xs text-dream-muted dark:text-dream-muted-dark">
             {network.nodes.length} 个关键词 · {network.dream_count} 条梦境
           </p>
+          {network.truncated && (
+            <p className="mb-3 text-xs text-dream-muted dark:text-dream-muted-dark" role="status">
+              网络较大，当前展示高频关键词、强关联连线及每个关键词最近 20 条相关梦境。
+            </p>
+          )}
           <DreamNetwork
             emptyMessage="还没有关键词。添加梦境关键词后，它们会显示在这里。"
             network={network}

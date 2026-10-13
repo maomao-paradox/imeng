@@ -111,6 +111,9 @@ export function DreamDetailPage() {
         </div>
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-2">
+        <span className={`rounded-full px-3 py-1 text-xs ${dream.is_public ? 'bg-dream-violet-soft text-dream-violet dark:bg-dream-violet-deep' : 'border border-dream-line text-dream-muted dark:border-dream-line-dark dark:text-dream-muted-dark'}`}>
+          {dream.is_public ? `公开${dream.is_anonymous ? ' · 匿名' : ' · 昵称展示'}` : '仅自己可见'}
+        </span>
         {dream.mood.map((mood) => (
           <span className="rounded-full bg-dream-violet-soft px-3 py-1 text-xs text-dream-violet dark:bg-dream-violet-deep" key={mood}>{mood}</span>
         ))}

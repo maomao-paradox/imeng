@@ -244,6 +244,11 @@ export function DreamNetwork({
               </li>
             ))}
           </ul>
+          {selectedNode.related_dreams_total > selectedNode.related_dreams.length && (
+            <p className="mt-2 text-xs text-dream-muted dark:text-dream-muted-dark">
+              显示最近 {selectedNode.related_dreams.length} 条，共 {selectedNode.related_dreams_total} 条相关梦境。
+            </p>
+          )}
         </aside>
       )}
     </div>

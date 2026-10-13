@@ -19,6 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.dream_reaction import DreamReaction
     from app.models.keyword import Keyword
     from app.models.user import User
 
@@ -50,4 +51,8 @@ class Dream(Base):
         back_populates="dream",
         cascade="all, delete-orphan",
         order_by="Keyword.id",
+    )
+    reactions: Mapped[list[DreamReaction]] = relationship(
+        back_populates="dream",
+        cascade="all, delete-orphan",
     )

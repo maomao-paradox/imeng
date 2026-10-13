@@ -10,6 +10,8 @@ interface DreamDraft {
   date: string
   mood: Mood[]
   clarity: number
+  is_public: boolean
+  is_anonymous: boolean
 }
 
 const DRAFT_KEY = 'imeng-dream-draft'
@@ -34,6 +36,8 @@ function readDraft(): Partial<DreamDraft> {
         date: typeof draft.date === 'string' ? draft.date : localDate(),
         mood: Array.isArray(draft.mood) ? draft.mood : [],
         clarity: typeof draft.clarity === 'number' ? draft.clarity : 3,
+        is_public: typeof draft.is_public === 'boolean' ? draft.is_public : false,
+        is_anonymous: typeof draft.is_anonymous === 'boolean' ? draft.is_anonymous : true,
       }
     }
   } catch {
@@ -53,6 +57,8 @@ export function DreamFormPage() {
   const [date, setDate] = useState(searchParams.get('date') ?? draft.date ?? localDate())
   const [mood, setMood] = useState<Mood[]>(draft.mood ?? [])
   const [clarity, setClarity] = useState(draft.clarity ?? 3)
+  const [isPublic, setIsPublic] = useState(draft.is_public ?? false)
+  const [isAnonymous, setIsAnonymous] = useState(draft.is_anonymous ?? true)
   const [loading, setLoading] = useState(editing)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -64,6 +70,8 @@ export function DreamFormPage() {
       setDate(dream.date)
       setMood(dream.mood)
       setClarity(dream.clarity)
+      setIsPublic(dream.is_public)
+      setIsAnonymous(dream.is_anonymous)
     }).catch((loadError: unknown) => {
       setError(loadError instanceof Error ? loadError.message : '读取梦境失败')
     }).finally(() => setLoading(false))
@@ -71,9 +79,12 @@ export function DreamFormPage() {
 
   useEffect(() => {
     if (!editing && !loading) {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ content, date, mood, clarity }))
+      localStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ content, date, mood, clarity, is_public: isPublic, is_anonymous: isAnonymous }),
+      )
     }
-  }, [editing, loading, content, date, mood, clarity])
+  }, [editing, loading, content, date, mood, clarity, isPublic, isAnonymous])
 
   function toggleMood(selected: Mood): void {
     setMood((current) => current.includes(selected)
@@ -85,7 +96,14 @@ export function DreamFormPage() {
     event.preventDefault()
     setPending(true)
     setError(null)
-    const payload: DreamPayload = { content, date, mood, clarity }
+    const payload: DreamPayload = {
+      content,
+      date,
+      mood,
+      clarity,
+      is_public: isPublic,
+      is_anonymous: isAnonymous,
+    }
     try {
       const dream = editing && dreamId !== null
         ? await updateDream(dreamId, payload)
@@ -111,7 +129,9 @@ export function DreamFormPage() {
         {editing ? '编辑梦境' : '记下这个梦'}
       </h1>
       <p className="mb-7 mt-3 text-sm text-dream-muted dark:text-dream-muted-dark">
-        梦境内容仅你可见。草稿会自动保存在当前浏览器。
+        {isPublic
+          ? '公开后，其他人可看到梦境摘要、日期、情绪和关键词，不会看到正文全文。'
+          : '梦境仅你可见。草稿会自动保存在当前浏览器。'}
       </p>
       <form className="space-y-7" onSubmit={(event) => void submit(event)}>
         <label className="block text-sm font-medium">
@@ -158,6 +178,39 @@ export function DreamFormPage() {
               <span className="ml-2 text-xs text-dream-muted">{clarity} / 5</span>
             </div>
           </fieldset>
+          <fieldset className="space-y-3 rounded-2xl border border-dream-line bg-white p-4 dark:border-dream-line-dark dark:bg-dream-card">
+            <legend className="px-1 text-sm font-medium">隐私与分享</legend>
+            <label className="flex cursor-pointer items-start gap-3 text-sm">
+              <input
+                checked={isPublic}
+                className="mt-0.5 accent-dream-violet"
+                type="checkbox"
+                onChange={(event) => setIsPublic(event.target.checked)}
+              />
+              <span>
+                <span className="block font-medium">公开到梦境广场</span>
+                <span className="mt-1 block text-xs leading-5 text-dream-muted dark:text-dream-muted-dark">
+                  默认仅自己可见。公开后可随时关闭；广场不展示正文全文、邮箱或账号编号。
+                </span>
+              </span>
+            </label>
+            {isPublic && (
+              <label className="ml-6 flex cursor-pointer items-start gap-3 text-sm">
+                <input
+                  checked={isAnonymous}
+                  className="mt-0.5 accent-dream-violet"
+                  type="checkbox"
+                  onChange={(event) => setIsAnonymous(event.target.checked)}
+                />
+                <span>
+                  <span className="block font-medium">匿名展示</span>
+                  <span className="mt-1 block text-xs text-dream-muted dark:text-dream-muted-dark">
+                    {isAnonymous ? '广场将使用随机梦旅人代号。' : '广场将展示你的昵称。'}
+                  </span>
+                </span>
+              </label>
+            )}
+          </fieldset>
         </div>
         <fieldset>
           <legend className="mb-3 text-sm font-medium">情绪（可多选）</legend>
@@ -197,6 +250,8 @@ export function DreamFormPage() {
                 setMood([])
                 setClarity(3)
                 setDate(localDate())
+                setIsPublic(false)
+                setIsAnonymous(true)
               }}
             >
               清除草稿

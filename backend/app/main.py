@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.api import auth, calendar, dreams
+from app.api import auth, calendar, dreams, social
 from app.core.config import FRONTEND_ORIGIN
 from app.db.session import engine
 
@@ -39,3 +39,4 @@ async def health_check() -> HealthResponse:
 app.include_router(auth.router, prefix="/api")
 app.include_router(dreams.router, prefix="/api")
 app.include_router(calendar.router, prefix="/api")
+app.include_router(social.router, prefix="/api")

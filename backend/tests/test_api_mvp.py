@@ -1,11 +1,13 @@
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import date
 
 import httpx
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import app.models  # noqa: F401
+from app.api import auth as auth_api
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
@@ -18,6 +20,7 @@ def anyio_backend() -> str:
 
 @asynccontextmanager
 async def create_test_client() -> AsyncIterator[httpx.AsyncClient]:
+    auth_api._attempts.clear()
     test_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with test_engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
@@ -239,7 +242,12 @@ async def test_all_dreams_network_aggregates_keywords_and_cooccurrences() -> Non
         assert second_user.status_code == 201
         other_network = await client.get("/api/dreams/network")
         assert other_network.status_code == 200
-        assert other_network.json() == {"nodes": [], "edges": [], "dream_count": 0}
+        assert other_network.json() == {
+            "nodes": [],
+            "edges": [],
+            "dream_count": 0,
+            "truncated": False,
+        }
 
 
 @pytest.mark.anyio
@@ -257,3 +265,200 @@ async def test_register_rejects_duplicate_email_and_weak_password() -> None:
             json={"email": "weak@example.test", "password": "short"},
         )
         assert weak.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_public_dreams_privacy_resonance_and_daily_matches() -> None:
+    async with create_test_client() as client:
+        owner = await client.post(
+            "/api/auth/register",
+            json={
+                "email": "public-owner@example.test",
+                "password": "a-long-test-password",
+                "nickname": "公开昵称",
+            },
+        )
+        assert owner.status_code == 201
+
+        public_dreams = []
+        for content, keywords, anonymous in (
+            (
+                "海边有一只鸟。" + "长梦境内容" * 35,
+                ["海边", "飞翔"],
+                True,
+            ),
+            ("另一场海边梦见月亮。", ["海边", "飞翔", "月亮"], False),
+        ):
+            created = await client.post(
+                "/api/dreams",
+                json={
+                    "content": content,
+                    "date": date.today().isoformat(),
+                    "mood": ["奇妙"],
+                    "is_public": True,
+                    "is_anonymous": anonymous,
+                },
+            )
+            assert created.status_code == 201
+            dream_id = created.json()["id"]
+            replaced = await client.put(
+                f"/api/dreams/{dream_id}/keywords",
+                json={
+                    "keywords": [{"word": word, "weight": 0.5} for word in keywords]
+                },
+            )
+            assert replaced.status_code == 200
+            public_dreams.append(dream_id)
+
+        private = await client.post(
+            "/api/dreams",
+            json={"content": "严格私密梦境", "date": date.today().isoformat()},
+        )
+        assert private.status_code == 201
+        assert private.json()["is_public"] is False
+        assert private.json()["is_anonymous"] is True
+
+        updated_private = await client.patch(
+            f"/api/dreams/{private.json()['id']}",
+            json={"is_public": True, "is_anonymous": False},
+        )
+        assert updated_private.status_code == 200
+        assert updated_private.json()["is_public"] is True
+        assert updated_private.json()["is_anonymous"] is False
+        own_reaction = await client.put(
+            f"/api/social/dreams/{public_dreams[0]}/resonance"
+        )
+        assert own_reaction.status_code == 409
+
+        hidden_private = await client.post(
+            "/api/dreams",
+            json={"content": "仍然私密", "date": date.today().isoformat()},
+        )
+        assert hidden_private.status_code == 201
+
+        feed = await client.get("/api/social/dreams")
+        assert feed.status_code == 200
+        feed_body = feed.json()
+        assert feed_body["total"] == 3
+        assert all(
+            "content" not in item and "email" not in item
+            for item in feed_body["items"]
+        )
+        assert all("user_id" not in item for item in feed_body["items"])
+        anonymous_post = next(
+            item for item in feed_body["items"] if item["id"] == public_dreams[0]
+        )
+        assert anonymous_post["author_label"].startswith("匿名梦旅人-")
+        assert len(anonymous_post["summary"]) == 160
+        assert anonymous_post["is_mine"] is True
+        named_post = next(
+            item for item in feed_body["items"] if item["id"] == public_dreams[1]
+        )
+        assert named_post["author_label"] == "公开昵称"
+        page = await client.get("/api/social/dreams", params={"limit": 1, "offset": 1})
+        assert page.status_code == 200
+        assert page.json()["total"] == 3
+        assert len(page.json()["items"]) == 1
+        assert page.json()["offset"] == 1
+        filtered = await client.get(
+            "/api/social/dreams",
+            params={"q": "海边", "mood": "奇妙"},
+        )
+        assert filtered.status_code == 200
+        assert filtered.json()["total"] == 2
+
+        await client.post("/api/auth/logout")
+        matcher = await client.post(
+            "/api/auth/register",
+            json={
+                "email": "match-user@example.test",
+                "password": "a-long-test-password",
+            },
+        )
+        assert matcher.status_code == 201
+        source = await client.post(
+            "/api/dreams",
+            json={
+                "content": "今天梦见海边飞翔",
+                "date": date.today().isoformat(),
+            },
+        )
+        source_id = source.json()["id"]
+        await client.put(
+            f"/api/dreams/{source_id}/keywords",
+            json={
+                "keywords": [
+                    {"word": "海边", "weight": 0.5},
+                    {"word": "飞翔", "weight": 0.5},
+                ]
+            },
+        )
+        matches = await client.get("/api/social/matches/today")
+        assert matches.status_code == 200
+        match_body = matches.json()
+        assert match_body["total"] == 2
+        assert match_body["items"][0]["id"] == public_dreams[0]
+        assert match_body["items"][0]["similarity"] == 1
+        assert match_body["items"][0]["is_mine"] is False
+        assert match_body["items"][0]["common_keywords"] == ["海边", "飞翔"]
+        assert match_body["items"][1]["similarity"] == pytest.approx(
+            2 / 3,
+            abs=0.0001,
+        )
+        assert all(
+            "content" not in item and "email" not in item
+            for item in match_body["items"]
+        )
+
+        reaction = await client.put(
+            f"/api/social/dreams/{public_dreams[0]}/resonance"
+        )
+        assert reaction.status_code == 200
+        assert reaction.json() == {"reaction_count": 1, "reacted_by_me": True}
+        duplicate_reaction = await client.put(
+            f"/api/social/dreams/{public_dreams[0]}/resonance"
+        )
+        assert duplicate_reaction.json() == {"reaction_count": 1, "reacted_by_me": True}
+        removed_reaction = await client.delete(
+            f"/api/social/dreams/{public_dreams[0]}/resonance"
+        )
+        assert removed_reaction.json() == {"reaction_count": 0, "reacted_by_me": False}
+        private_reaction = await client.put(
+            f"/api/social/dreams/{hidden_private.json()['id']}/resonance"
+        )
+        assert private_reaction.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_personal_network_caps_related_dreams_and_reports_truncation() -> None:
+    async with create_test_client() as client:
+        registered = await client.post(
+            "/api/auth/register",
+            json={
+                "email": "network-size@example.test",
+                "password": "a-long-test-password",
+            },
+        )
+        assert registered.status_code == 201
+
+        for index in range(21):
+            dream = await client.post(
+                "/api/dreams",
+                json={
+                    "content": f"第 {index} 场海边梦",
+                    "date": date.today().isoformat(),
+                },
+            )
+            assert dream.status_code == 201
+            keyword_response = await client.put(
+                f"/api/dreams/{dream.json()['id']}/keywords",
+                json={"keywords": [{"word": "海边", "weight": 0.5}]},
+            )
+            assert keyword_response.status_code == 200
+
+        network = await client.get("/api/dreams/network")
+        assert network.status_code == 200
+        body = network.json()
+        assert body["truncated"] is True
+        assert body["nodes"][0]["related_dreams_total"] == 21
+        assert len(body["nodes"][0]["related_dreams"]) == 20

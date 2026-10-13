@@ -26,6 +26,8 @@ class DreamCreate(BaseModel):
     date: Date
     mood: list[Mood] = Field(default_factory=list, max_length=8)
     clarity: int = Field(default=3, ge=1, le=5)
+    is_public: bool = False
+    is_anonymous: bool = True
 
     @field_validator("content")
     @classmethod
@@ -47,6 +49,8 @@ class DreamUpdate(BaseModel):
     date: Date | None = None
     mood: list[Mood] | None = Field(default=None, max_length=8)
     clarity: int | None = Field(default=None, ge=1, le=5)
+    is_public: bool | None = None
+    is_anonymous: bool | None = None
 
     @field_validator("content")
     @classmethod
@@ -96,6 +100,8 @@ class DreamRead(BaseModel):
     created_at: datetime
     keywords: list[KeywordRead]
     keyword_extraction_status: Literal["pending", "complete", "failed", "unconfigured"]
+    is_public: bool
+    is_anonymous: bool
 
     model_config = {"from_attributes": True}
 
@@ -117,6 +123,7 @@ class NetworkNode(BaseModel):
     weight: float
     occurrences: int
     related_dreams: list["DreamSummary"]
+    related_dreams_total: int = 0
 
 
 class NetworkEdge(BaseModel):
@@ -129,6 +136,53 @@ class DreamNetwork(BaseModel):
     nodes: list[NetworkNode]
     edges: list[NetworkEdge]
     dream_count: int = 0
+    truncated: bool = False
+
+
+class PublicDreamRead(BaseModel):
+    id: int
+    date: Date
+    summary: str
+    mood: list[Mood]
+    keywords: list[str]
+    author_label: str
+    is_anonymous: bool
+    reaction_count: int
+    reacted_by_me: bool
+    is_mine: bool
+
+
+class PublicDreamPage(BaseModel):
+    items: list[PublicDreamRead]
+    total: int
+    limit: int
+    offset: int
+
+
+class DreamReactionRead(BaseModel):
+    reaction_count: int
+    reacted_by_me: bool
+
+
+class DreamMatchRead(BaseModel):
+    id: int
+    date: Date
+    summary: str
+    mood: list[Mood]
+    keywords: list[str]
+    common_keywords: list[str]
+    similarity: float
+    author_label: str
+    is_anonymous: bool
+    reaction_count: int
+    reacted_by_me: bool
+    is_mine: bool
+
+
+class DreamMatchPage(BaseModel):
+    date: Date
+    total: int
+    items: list[DreamMatchRead]
 
 
 class DreamSummary(BaseModel):
